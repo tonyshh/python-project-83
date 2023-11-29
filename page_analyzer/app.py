@@ -61,5 +61,15 @@ def url_list():
     return render_template('url_list.html', urls=urls)
 
 
+@app.route('/urls/<int:url_id>/checks', methods=['POST'])
+def create_check(url_id):
+    with psycopg2.connect(os.getenv('DATABASE_URL')) as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO url_checks (url_id) VALUES (%s)", (url_id,))
+            conn.commit()
+    flash('Новая проверка создана', 'success')
+    return redirect(url_for('url_details', url_id=url_id))
+
+
 if __name__ == '__main__':
     app.run(debug=True)
