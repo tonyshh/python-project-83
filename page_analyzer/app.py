@@ -1,75 +1,108 @@
-from flask import Flask, request, redirect, url_for, flash, render_template
-import os
+
+from flask import Flask, render_template, request, flash, get_flashed_messages
+from flask import redirect, url_for
 import psycopg2
-from dotenv import load_dotenv
+import os
+import datetime
 import validators
+from dotenv import load_dotenv
+
 
 load_dotenv()
-
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_secret_key')
+app.secret_key = os.urandom(12).hex()
 
-@app.route('/', methods=['GET', 'POST'])
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        url_name = request.form['url']
-        
-        # Валидация URL
-        if not validators.url(url_name):
-            flash('Введите валидный URL.', 'danger')
-        elif len(url_name) > 255:
-            flash('URL не должен превышать 255 символов.', 'danger')
-        else:
-            # Если URL валидный, продолжаем с добавлением в базу данных
-            database_url = os.getenv('DATABASE_URL')
-            with psycopg2.connect(database_url) as conn:
-                with conn.cursor() as cur:
-                    try:
-                        cur.execute("INSERT INTO urls (name) VALUES (%s)", (url_name,))
-                        conn.commit()
-                        flash('URL успешно добавлен', 'success')
-                    except psycopg2.IntegrityError:
-                        conn.rollback()
-                        flash('URL уже существует', 'danger')
-            # Перенаправление на главную страницу
-            return redirect(url_for('index'))
-    # Отображение главной страницы
-    return render_template('index.html')
+    messages = get_flashed_messages(with_categories=True)
+    return render_template(
+        'index.html',
+        messages=messages
+    )
 
-
-@app.route('/urls/<int:url_id>')
-def url_details(url_id):
-    database_url = os.getenv('DATABASE_URL')
-    with psycopg2.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM urls WHERE id = %s", (url_id,))
-            url = cur.fetchone()
-    if url is not None:
-        return render_template('url_details.html', url=url)
-    else:
-        flash('URL с таким ID не найден.', 'danger')
-        return redirect(url_for('index'))
-
-
-@app.route('/urls')
-def url_list():
-    database_url = os.getenv('DATABASE_URL')
-    with psycopg2.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM urls ORDER BY created_at DESC")
-            urls = cur.fetchall()
-    return render_template('url_list.html', urls=urls)
-
-
-@app.route('/urls/<int:url_id>/checks', methods=['POST'])
-def create_check(url_id):
-    with psycopg2.connect(os.getenv('DATABASE_URL')) as conn:
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO url_checks (url_id) VALUES (%s)", (url_id,))
+@app.post('/urls/')
+def urls_post():
+    url = request.form.to_dict()['url']
+    if validators.url(url):
+        today = datetime.datetime.now()
+        created_at = datetime.date(today.year, today.month, today.day)
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute('SELECT name FROM urls')
+        urls = [data[0] for data in cur.fetchall()]
+        if url not in urls:
+            cur.execute('INSERT INTO urls (name, created_at) VALUES (%s, %s)',
+                        (url, created_at))
             conn.commit()
-    flash('Новая проверка создана', 'success')
-    return redirect(url_for('url_details', url_id=url_id))
+            cur.execute('SELECT id FROM urls WHERE name = (%s)', (url,))
+            site_id = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            flash('Страница успешно добавлена', 'success')
+        else:
+            cur.execute('SELECT id FROM urls WHERE name = (%s)', (url,))
+            site_id = cur.fetchone()[0]
+            flash('Страница уже существует', 'info')
+        return redirect(url_for('url_get', id=site_id))
+    else:
+        flash('Некорректный url', 'error')
+        return redirect('/')
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/urls/<id>')
+def url_get(id):
+    checks = []
+    messages = get_flashed_messages(with_categories=True)
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM urls WHERE id = (%s)', (id,))
+    site_id, site_name, site_created_at = cur.fetchone()
+    cur.execute('SELECT id, created_at FROM url_checks WHERE url_id = (%s)',
+                (id,))
+    data = cur.fetchall()
+    if data:
+        checks = data
+    cur.close()
+    conn.close()
+    return render_template(
+        'show.html',
+        site_id=site_id,
+        site_name=site_name,
+        site_created_at=site_created_at,
+        checks=checks,
+        messages=messages,
+    )
+
+
+@app.route('/urls/')
+def urls_get():
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute('SELECT urls.id AS url_id, urls.name AS url_name, '
+                'MAX(url_checks.created_at) AS check_created_at FROM urls '
+                'LEFT JOIN url_checks ON urls.id = url_checks.url_id '
+                'GROUP BY urls.id ORDER BY urls.created_at DESC')
+    sites = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template(
+        'urls.html',
+        sites=sites
+    )
+
+
+@app.post('/urls/<id>/checks')
+def url_check(id):
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    today = datetime.datetime.now()
+    created_at = datetime.date(today.year, today.month, today.day)
+    cur.execute('INSERT INTO url_checks (url_id, created_at) VALUES (%s, %s)',
+                (id, created_at))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('url_get', id=id))
