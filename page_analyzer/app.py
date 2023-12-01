@@ -6,13 +6,12 @@ import datetime
 import validators
 import requests
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
 
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(12).hex()
 DATABASE_URL = os.getenv('DATABASE_URL_DEV')
-
-
 @app.route('/')
 def index():
     messages = get_flashed_messages(with_categories=True)
@@ -47,8 +46,6 @@ def urls_post():
     else:
         flash('Некорректный url', 'danger')
         return redirect('/')
-
-
 @app.route('/urls/<id>')
 def url_get(id):
     checks = []
@@ -57,7 +54,7 @@ def url_get(id):
     cur = conn.cursor()
     cur.execute('SELECT * FROM urls WHERE id = (%s)', (id,))
     site_id, site_name, site_created_at = cur.fetchone()
-    cur.execute('SELECT id, status_code, created_at '
+    cur.execute('SELECT id, status_code, h1, title, description, created_at '
                 'FROM url_checks WHERE url_id = (%s)',
                 (id,))
     data = cur.fetchall()
@@ -90,8 +87,12 @@ def urls_get():
         'urls.html',
         sites=sites
     )
+
 @app.post('/urls/<id>/checks')
 def url_check(id):
+    h1 = ''
+    title = ''
+    description = ''
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
     today = datetime.datetime.now()
@@ -101,13 +102,19 @@ def url_check(id):
     try:
         r = requests.get(url)
         code = r.status_code
-        cur.execute('INSERT INTO url_checks (url_id, created_at, status_code) '
-                    'VALUES (%s, %s, %s)',
-                    (id, created_at, code))
+        soup = BeautifulSoup(r.text, 'html.parser')
+        if soup.h1:
+            h1 = soup.h1.string
+        if soup.title:
+            title = soup.title.string
+        meta = soup.find('meta', attrs={'name': 'description'})
+        if meta:
+            description = meta.get('content')
+        cur.execute('INSERT INTO url_checks '
+                    '(url_id, status_code, h1, title, description, created_at) '
+                    'VALUES (%s, %s, %s, %s, %s, %s)',
+                    (id, code, h1, title, description, created_at))
         conn.commit()
+        flash('Страница успешно проверена', 'success')
     except requests.exceptions.ConnectionError:
         flash('Произошла ошибка при проверке', 'danger')
-
-    cur.close()
-    conn.close()
-    return redirect(url_for('url_get', id=id))
