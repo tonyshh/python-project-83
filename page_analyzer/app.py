@@ -7,11 +7,18 @@ import validators
 import requests
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-
+from urllib.parse import urlparse
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(12).hex()
-DATABASE_URL = os.getenv('DATABASE_URL_DEV')
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+def normalize_url(url):
+    o = urlparse(url)
+    name = o.netloc + o.path
+    return f'https://{name}'
+
+
 @app.route('/')
 def index():
     messages = get_flashed_messages(with_categories=True)
@@ -19,9 +26,11 @@ def index():
         'index.html',
         messages=messages
     )
+
+
 @app.post('/urls/')
 def urls_post():
-    url = request.form.to_dict()['url']
+    url = normalize_url(request.form.to_dict()['url'])
     if validators.url(url):
         today = datetime.datetime.now()
         created_at = datetime.date(today.year, today.month, today.day)
@@ -87,7 +96,6 @@ def urls_get():
         'urls.html',
         sites=sites
     )
-
 @app.post('/urls/<id>/checks')
 def url_check(id):
     h1 = ''
@@ -118,3 +126,6 @@ def url_check(id):
         flash('Страница успешно проверена', 'success')
     except requests.exceptions.ConnectionError:
         flash('Произошла ошибка при проверке', 'danger')
+    cur.close()
+    conn.close()
+    return redirect(url_for('url_get', id=id))
