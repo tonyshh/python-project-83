@@ -1,5 +1,5 @@
-# Установка зависимостей
+# Install dependencies
 make install
 
-# Применение миграций к базе данных
-psql -a -d $DATABASE_URL -f database.sql
+# Apply database migrations
+psql -a -d $DATABASE_URL -f /home/shalin/Документы/Dev/python-project-83/database.sql

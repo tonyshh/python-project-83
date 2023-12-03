@@ -10,6 +10,9 @@ start:
 install:
 	poetry install
 
+build:
+    ./build.sh
+
 schema-db:
 	psql $(DB_URL) < database.sql
 
