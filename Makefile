@@ -11,7 +11,7 @@ install:
 	poetry install
 
 build:
-    ./build.sh
+	./build.sh
 
 schema-db:
 	psql $(DB_URL) < database.sql
