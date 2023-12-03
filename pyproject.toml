@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "page_analyzer"
+name = "hexlet-code"
 version = "0.1.0"
 description = ""
 authors = ["tonyshh <shalin.anton8@gmail.com>"]
@@ -9,7 +9,7 @@ packages = [{include = "page_analyzer"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 flask = "^3.0.0"
-gunicorn = "^21.2.0"
+gunicorn = "^20.0.1"
 psycopg2 = "^2.9.9"
 python-dotenv = "^1.0.0"
 validators = "^0.22.0"
