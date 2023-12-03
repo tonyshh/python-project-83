@@ -28,17 +28,7 @@ package-install:
 	python3 -m pip install dist/*.whl
 
 lint:
-	poetry run flake8 page_analyzer tests
+	poetry run flake8
 
-test:
-	poetry run pytest --cov=page_analyzer -vv -s
-
-test-coverage:
-	poetry run pytest --cov=page_analyzer --cov-report xml
-
-selfcheck:
-	poetry check
-
-check: lint test
 
 .PHONY: dev install test lint selfcheck check build
