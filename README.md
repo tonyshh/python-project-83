@@ -2,6 +2,8 @@
 
 [![Actions Status](https://github.com/tonyshh/python-project-83/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/tonyshh/python-project-83/actions)
 
+[![Maintainability](https://api.codeclimate.com/v1/badges/f2135ccff4ea992980bc/maintainability)](https://codeclimate.com/github/tonyshh/python-project-83/maintainability)
+
 # [Page Analyzer](https://hexlet-code-jwtk.onrender.com)
 
 это сайт, который анализирует указанные страницы на SEO-пригодность
